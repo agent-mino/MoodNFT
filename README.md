@@ -1,77 +1,71 @@
-## Foundry
+# MoodNFT
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+[![CI](https://github.com/agent-mino/MoodNFT/actions/workflows/test.yml/badge.svg)](https://github.com/agent-mino/MoodNFT/actions/workflows/test.yml)
 
-Foundry consists of:
+Two ERC-721 contracts that explore on-chain vs. off-chain NFT metadata. **MoodNft** stores its artwork entirely on-chain as base64-encoded SVG — no IPFS, no external dependency. **BasicNft** uses IPFS-hosted metadata as a reference counterpart.
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Contracts
 
-## Documentation
+### MoodNft
 
-https://book.getfoundry.sh/
+An NFT whose image lives on-chain and toggles between two moods.
 
-## Usage
+- **Mint** — anyone can mint; new tokens start `HAPPY`
+- **Flip** — `flipMood(tokenId)` switches between `HAPPY` and `SAD`; only the token owner or an approved operator can call it
+- **Token URI** — fully generated on-chain: the contract encodes the SVG into a `data:image/svg+xml;base64,…` URI and wraps it in a `data:application/json;base64,…` metadata blob, so the NFT renders in any ERC-721-aware wallet with no external requests
 
-### Build
-
-```shell
-$ forge build
+```
+mintNft() → token #N (HAPPY)
+flipMood(N) → HAPPY ↔ SAD   (owner/approved only)
+tokenURI(N) → data:application/json;base64,<SVG embedded>
 ```
 
-### Test
+### BasicNft
 
-```shell
-$ forge test
+A minimal ERC-721 where each token's URI is supplied at mint time, pointing to an IPFS-hosted metadata file. Used as a reference implementation alongside MoodNft.
+
+## How on-chain metadata works
+
+```
+Deploy script reads happy.svg / sad.svg from disk
+  └─▶ base64-encodes each → data:image/svg+xml;base64,…
+        └─▶ stored as constructor arguments in the contract
+
+tokenURI() at query time:
+  └─▶ picks the image URI for the current mood
+        └─▶ encodes JSON { name, description, attributes, image }
+              └─▶ wraps in data:application/json;base64,…
+                    └─▶ returned to the caller (wallet, marketplace)
 ```
 
-### Format
+No IPFS pinning service, no metadata server, no CDN. The token survives as long as the chain does.
 
-```shell
-$ forge fmt
+## Tech stack
+
+Solidity 0.8.18 · OpenZeppelin ERC-721 · Foundry (Forge + Anvil)
+
+## Run locally
+
+Requires [Foundry](https://book.getfoundry.sh/getting-started/installation).
+
+```bash
+git clone --recurse-submodules https://github.com/agent-mino/MoodNFT.git
+cd MoodNFT
+forge build
+forge test
 ```
 
-### Gas Snapshots
+## Deploy
 
-```shell
-$ forge snapshot
+```bash
+# Local Anvil node
+anvil &
+forge script script/DeployMoodNft.s.sol --broadcast --rpc-url http://127.0.0.1:8545 --private-key <ANVIL_KEY>
+
+# Sepolia testnet
+forge script script/DeployMoodNft.s.sol --broadcast --rpc-url $SEPOLIA_RPC_URL --private-key $PRIVATE_KEY
 ```
 
-### Anvil
+## CI
 
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
-Happy SVG:
-data:image/svg+xml;base64, 
-PHN2ZyB2aWV3Qm94PSIwIDAgMjAwIDIwMCIgd2lkdGg9IjQwMCIgIGhlaWdodD0iNDAwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxjaXJjbGUgY3g9IjEwMCIgY3k9IjEwMCIgZmlsbD0iIzA0YTFmNiIgcj0iNzgiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMyIvPgogIDxnIGNsYXNzPSJleWVzIj4KICAgIDxjaXJjbGUgY3g9IjcwIiBjeT0iODIiIHI9IjEyIi8+CiAgICA8Y2lyY2xlIGN4PSIxMjciIGN5PSI4MiIgcj0iMTIiLz4KICA8L2c+CiAgPHBhdGggZD0ibTEzOC44MSAxMTYuNTNjLjY5IDI2LjE3LTY0LjExIDQyLTgxLjUyLS43MyIgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiBibGFjazsgc3Ryb2tlLXdpZHRoOiAzOyIvPgo8L3N2Zz4KCgo8IS0tIDxzdmcgdmlld0JveD0iMCAwIDIwMCAyMDAiIHdpZHRoPSI0MDAiICBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMDAiIGZpbGw9InllbGxvdyIgcj0iNzgiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMyIvPgogIDxnIGNsYXNzPSJleWVzIj4KICAgIDxjaXJjbGUgY3g9IjcwIiBjeT0iODIiIHI9IjEyIi8+CiAgICA8Y2lyY2xlIGN4PSIxMjciIGN5PSI4MiIgcj0iMTIiLz4KICA8L2c+CiAgPHBhdGggZD0ibTEzOC44MSAxMTYuNTNjLjY5IDI2LjE3LTY0LjExIDQyLTgxLjUyLS43MyIgc3R5bGU9ImZpbGw6bm9uZTsgc3Ryb2tlOiBibGFjazsgc3Ryb2tlLXdpZHRoOiAzOyIvPgo8L3N2Zz4gLS0+
-
-Sad SVG:
-data:image/svg+xml;base64, 
-PD94bWwgdmVyc2lvbj0iMS4wIiBzdGFuZGFsb25lPSJubyI/Pgo8c3ZnIHdpZHRoPSIxMDI0cHgiIGhlaWdodD0iMTAyNHB4IiB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxwYXRoIGZpbGw9IiMwMzAzMDMiIGQ9Ik01MTIgNjRDMjY0LjYgNjQgNjQgMjY0LjYgNjQgNTEyczIwMC42IDQ0OCA0NDggNDQ4IDQ0OC0yMDAuNiA0NDgtNDQ4Uzc1OS40IDY0IDUxMiA2NHptMCA4MjBjLTIwNS40IDAtMzcyLTE2Ni42LTM3Mi0zNzJzMTY2LjYtMzcyIDM3Mi0zNzIgMzcyIDE2Ni42IDM3MiAzNzItMTY2LjYgMzcyLTM3MiAzNzJ6Ii8+CiAgPHBhdGggZmlsbD0iIzA0YTFmNiIgZD0iTTUxMiAxNDBjLTIwNS40IDAtMzcyIDE2Ni42LTM3MiAzNzJzMTY2LjYgMzcyIDM3MiAzNzIgMzcyLTE2Ni42IDM3Mi0zNzItMTY2LjYtMzcyLTM3Mi0zNzJ6TTI4OCA0MjFhNDguMDEgNDguMDEgMCAwIDEgOTYgMCA0OC4wMSA0OC4wMSAwIDAgMS05NiAwem0zNzYgMjcyaC00OC4xYy00LjIgMC03LjgtMy4yLTguMS03LjRDNjA0IDYzNi4xIDU2Mi41IDU5NyA1MTIgNTk3cy05Mi4xIDM5LjEtOTUuOCA4OC42Yy0uMyA0LjItMy45IDcuNC04LjEgNy40SDM2MGE4IDggMCAwIDEtOC04LjRjNC40LTg0LjMgNzQuNS0xNTEuNiAxNjAtMTUxLjZzMTU1LjYgNjcuMyAxNjAgMTUxLjZhOCA4IDAgMCAxLTggOC40em0yNC0yMjRhNDguMDEgNDguMDEgMCAwIDEgMC05NiA0OC4wMSA0OC4wMSAwIDAgMSAwIDk2eiIvPgogIDxwYXRoIGZpbGw9IiMzMzMiIGQ9Ik0yODggNDIxYTQ4IDQ4IDAgMSAwIDk2IDAgNDggNDggMCAxIDAtOTYgMHptMjI0IDExMmMtODUuNSAwLTE1NS42IDY3LjMtMTYwIDE1MS42YTggOCAwIDAgMCA4IDguNGg0OC4xYzQuMiAwIDcuOC0zLjIgOC4xLTcuNCAzLjctNDkuNSA0NS4zLTg4LjYgOTUuOC04OC42czkyIDM5LjEgOTUuOCA4OC42Yy4zIDQuMiAzLjkgNy40IDguMSA3LjRINjY0YTggOCAwIDAgMCA4LTguNEM2NjcuNiA2MDAuMyA1OTcuNSA1MzMgNTEyIDUzM3ptMTI4LTExMmE0OCA0OCAwIDEgMCA5NiAwIDQ4IDQ4IDAgMSAwLTk2IDB6Ii8+Cjwvc3ZnPg==
-
-Example:
-data:image/svg+xml;base64, 
-PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MDAiIGhlaWdodD0iNTAwIj4KPHRleHQgeD0iMCIgeT0iMTUiIGZpbGw9ImJsYWNrIj4gaGkhIHlvdSBkZWNvZGVkIHRoaXMhIDwvdGV4dD4KPC9zdmc+
+Every push runs `forge fmt --check`, `forge build --sizes`, and `forge test -vvv`.
